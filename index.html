@@ -41,17 +41,17 @@
         </div>
 
         <div id="produk" class="section">
-            <h2>Manajemen Produk</h2>
-            <input type="text" id="main-prod-name" placeholder="Nama Produk (ex: Sabun Mandi)">
-            <button onclick="addMainProduct()">Simpan Produk Utama</button>
-            <hr>
-            <select id="select-main-prod"></select>
-            <input type="text" id="var-name" placeholder="Nama Varian (ex: Putih)">
-            <input type="text" id="var-barcode" placeholder="Barcode">
-            <input type="number" id="var-price" placeholder="Harga">
-            <button onclick="addVariant()">Tambah Varian</button>
-            <table id="product-table"><tr><th>Produk</th><th>Varian</th><th>Harga</th></tr></table>
-        </div>
+    <h2>Manajemen Produk</h2>
+    <input type="text" id="p-name" placeholder="Nama Produk (ex: Sabun Mandi)">
+    <input type="text" id="p-variant" placeholder="Varian (ex: Putih / Default)">
+    <input type="text" id="p-barcode" placeholder="Barcode">
+    <input type="number" id="p-price" placeholder="Harga">
+    <button onclick="addProduct()">Simpan Produk</button>
+    
+    <table id="product-table">
+        <tr><th>Nama</th><th>Varian</th><th>Barcode</th><th>Harga</th><th>Aksi</th></tr>
+    </table>
+</div>
     </div>
 
     <script>
@@ -93,42 +93,56 @@
             document.getElementById(id).classList.add('active');
         }
 
-        async function addMainProduct() {
-            let name = document.getElementById('main-prod-name').value;
-            await db.collection('main_products').add({ name });
-            alert("Berhasil!");
-        }
+        // --- SIMPAN PRODUK (SATU LANGKAH) ---
+async function addProduct() {
+    const data = {
+        name: document.getElementById('p-name').value,
+        variant: document.getElementById('p-variant').value || 'Default',
+        barcode: document.getElementById('p-barcode').value,
+        price: parseInt(document.getElementById('p-price').value)
+    };
 
-        async function addVariant() {
-            let mainProdId = document.getElementById('select-main-prod').value;
-            let variantName = document.getElementById('var-name').value;
-            let barcode = document.getElementById('var-barcode').value;
-            let price = parseInt(document.getElementById('var-price').value);
-            await db.collection('variants').add({ mainProdId, variantName, barcode, price });
-            alert("Varian ditambah!");
-        }
+    if(!data.name || !data.barcode || !data.price) return alert('Nama, Barcode, dan Harga wajib diisi!');
+    
+    await db.collection('products').add(data);
+    alert("Produk berhasil disimpan!");
+    // Reset input
+    document.getElementById('p-name').value = '';
+    document.getElementById('p-variant').value = '';
+    document.getElementById('p-barcode').value = '';
+    document.getElementById('p-price').value = '';
+}
 
-        // Listener untuk dropdown produk utama
-        db.collection('main_products').onSnapshot(snap => {
-            let select = document.getElementById('select-main-prod');
-            select.innerHTML = '<option value="">Pilih Produk...</option>';
-            snap.forEach(doc => select.innerHTML += `<option value="${doc.id}">${doc.data().name}</option>`);
-        });
+// --- TAMPILKAN TABEL ---
+db.collection('products').onSnapshot(snap => {
+    let table = `<tr><th>Nama</th><th>Varian</th><th>Barcode</th><th>Harga</th><th>Aksi</th></tr>`;
+    snap.forEach(doc => {
+        let p = doc.data();
+        table += `<tr>
+            <td>${p.name}</td>
+            <td>${p.variant}</td>
+            <td>${p.barcode}</td>
+            <td>Rp ${p.price}</td>
+            <td><button onclick="db.collection('products').doc('${doc.id}').delete()">Hapus</button></td>
+        </tr>`;
+    });
+    document.getElementById('product-table').innerHTML = table;
+});
 
-        // Pencarian Barcode Kasir
-        async function checkBarcode(e) {
-            if (e.key === 'Enter') {
-                let barcode = document.getElementById('barcode-input').value;
-                let snap = await db.collection('variants').where("barcode", "==", barcode).get();
-                if (!snap.empty) {
-                    let v = snap.docs[0].data();
-                    alert("Ditemukan: " + v.variantName + " - Rp " + v.price);
-                    document.getElementById('barcode-input').value = '';
-                } else {
-                    alert("Barcode tidak ditemukan!");
-                }
-            }
+// --- UPDATE PENCARIAN BARCODE ---
+async function checkBarcode(e) {
+    if (e.key === 'Enter') {
+        let barcode = document.getElementById('barcode-input').value;
+        let snap = await db.collection('products').where("barcode", "==", barcode).get();
+        if (!snap.empty) {
+            let p = snap.docs[0].data();
+            alert("Ditemukan: " + p.name + " (" + p.variant + ") - Rp " + p.price);
+            document.getElementById('barcode-input').value = '';
+        } else {
+            alert("Barcode tidak ditemukan!");
         }
+    }
+}
     </script>
 </body>
 </html>
