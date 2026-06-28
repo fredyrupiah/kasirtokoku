@@ -241,7 +241,6 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
     <button id="btnManajemen" onclick="openManajemenProduk()">PRODUK</button>
     <button id="btnRiwayat" onclick="toggleRiwayat()">RIWAYAT</button> 
     <button id="btnBackupRestore" class="button-sekunder" onclick="openModalBackup()">Backup/Restore</button>
-    <button id="btnSync" class="button-sekunder" onclick="mulaiSinkronisasi()" style="background: #607d8b;">↑ Upload Riwayat</button>
     <button id="btnUploadProduk" onclick="uploadProdukKeCloud()" style="background: #9c27b0;">↑ Upload Produk</button>
     <button id="btnDownloadProduk" onclick="downloadProdukDariCloud()" style="background: #2196f3;">↓ Download Produk</button>
 </div>
@@ -346,6 +345,7 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
 <script>
 let keranjang = [];
 let riwayat = [];
+let produkDB = [];
 let idRiwayatEdit = null;
 let globalScanBuffer = "";
 let globalScanTimer = null;
@@ -499,13 +499,12 @@ function renderTabelManajemen(filter = '') {
         // Buat baris tabel (tr)
         const tr = document.createElement("tr");
         
-        // --- MODIFIKASI: Tambahkan <td> baru yang berisi varianHtml ---
         tr.innerHTML = `
             <td>${produk.nama}</td>
             <td>${varianHtml}</td> 
             <td>
-                <button onclick="showFormEditProduk(${produk.id})">Edit</button>
-                <button class="button-hapus" onclick="hapusProduk(${produk.id})">Hapus</button>
+                <button onclick="showFormEditProduk('${produk.id}')">Edit</button>
+                <button class="button-hapus" onclick="hapusProduk('${produk.id}')">Hapus</button>
             </td>`;
         
         tbody.appendChild(tr);
@@ -608,7 +607,7 @@ async function simpanProduk() {
 
 async function hapusProduk(id) {
     if (confirm("Hapus produk ini?")) {
-        await deleteDoc(doc(window.db, "produk", id));
+        await window.deleteDoc(window.doc(window.firestoreDB, "produk", id));
         await muatDataAwal();
         showNotif("Produk dihapus", "info");
     }
@@ -839,7 +838,7 @@ function renderRiwayat() {
             <td>
                 <button onclick="lihatDetail(${originalIndex})">Lihat</button>
                 <button onclick="editTransaksi(${originalIndex})">Edit</button>
-                <button class="button-hapus" onclick="hapusRiwayat(${originalIndex})">Hapus</button>
+                <button class="button-hapus" onclick="hapusRiwayat('${r.id}')">Hapus</button>
             </td>`;
         tbody.appendChild(tr);
     });
@@ -862,9 +861,9 @@ function editTransaksi(i) {
     hitungKembalian(); 
     showNotif("Mode Edit: Silakan update uang pembeli.", "info", 2000); 
 }
-async function hapusRiwayat(id) { // Ubah param dari index ke ID dokumen
+async function hapusRiwayat(id) { 
     if (confirm("Hapus riwayat ini?")) {
-        await deleteDoc(doc(window.db, "riwayat", id));
+        await window.deleteDoc(window.doc(window.firestoreDB, "riwayat", id));
         await muatDataAwal();
         showNotif("Riwayat dihapus", "info");
     }
@@ -1015,22 +1014,24 @@ async function simpanTransaksi() {
 
     try {
         if (idRiwayatEdit !== null) {
-            // Jika sedang mode edit, PERBARUI data lama
-            await db.riwayat.update(idRiwayatEdit, transaksi);
-            idRiwayatEdit = null; // Kembalikan ke null setelah selesai update
+            // Mode Edit: Perbarui data lama di Firebase
+            const docRef = window.doc(window.firestoreDB, "riwayat", idRiwayatEdit);
+            await window.updateDoc(docRef, transaksi);
+            idRiwayatEdit = null; 
         } else {
-            // Jika transaksi biasa, TAMBAH data baru
-            await db.riwayat.add(transaksi);
+            // Transaksi Baru: Tambah ke Firebase
+            await window.addDoc(window.collection(window.firestoreDB, "riwayat"), transaksi);
         }
-        riwayat = await db.riwayat.orderBy('id').reverse().toArray();
-        renderRiwayat();
+        
+        // Panggil muatDataAwal untuk mengambil data terbaru dari server dan me-render ulang
+        await muatDataAwal(); 
+        
         return transaksi;
     } catch (e) {
-        showNotif("Gagal simpan: " + e, "error");
+        showNotif("Gagal simpan: " + e.message, "error");
         return null;
     }
-}
-
+ }
 
 function resetKeranjang() {
     keranjang = [];
@@ -1210,67 +1211,9 @@ function buatDataESCPOS(transaksi) {
 // === SISTEM SINKRONISASI CLOUD ===
 const URL_GAS = "https://script.google.com/macros/s/AKfycbxW0WYiZAytb_iZzuGONoTRRecRMKYdc_VBrf-2n3axH6pyA7ef6Y7Lk2aQJr1VcKVTAQ/exec";
 
-async function mulaiSinkronisasi() {
-    if (!navigator.onLine) {
-        showNotif("Anda sedang offline. Butuh internet untuk sinkron.", "error");
-        return;
-    }
-
-    try {
-        const btn = document.getElementById("btnSync");
-        btn.textContent = "Menyinkronkan...";
-        btn.style.background = "#ff9800"; // Ubah warna jadi orange saat proses
-
-        // 1. Ambil data riwayat yang is_synced masih 0 atau undefined
-        const dataBelumSync = await db.riwayat.filter(r => !r.is_synced || r.is_synced === 0).toArray();
-
-        if (dataBelumSync.length === 0) {
-            showNotif("Semua data sudah tersinkron dengan cloud", "success");
-            btn.textContent = "↑ Upload Riwayat";
-            btn.style.background = "#607d8b";
-            return;
-        }
-
-        showNotif(`Mengirim ${dataBelumSync.length} transaksi...`, "info");
-
-        // 2. Kirim ke Google Apps Script (POST)
-        const response = await fetch(URL_GAS, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: {
-                "Content-Type": "text/plain;charset=utf-8",
-            },
-            body: JSON.stringify({
-                action: 'push_riwayat',
-                data: dataBelumSync
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            // 3. Jika sukses, update database lokal menjadi is_synced: 1
-            for (let i = 0; i < dataBelumSync.length; i++) {
-                await db.riwayat.update(dataBelumSync[i].id, { is_synced: 1 });
-            }
-            showNotif("Sinkronisasi Berhasil!", "success");
-        } else {
-            showNotif("Gagal: " + result.message, "error", 4000);
-        }
-
-    } catch (error) {
-        console.error("Error Sync:", error);
-        showNotif("Gagal menghubungi server", "error");
-    } finally {
-        // Kembalikan tombol seperti semula
-        const btn = document.getElementById("btnSync");
-        btn.textContent = "↑ Upload Riwayat";
-        btn.style.background = "#607d8b";
-    }
-}
 </script>
 <script>
-  // Daftarkan Service Worker
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
@@ -1283,10 +1226,6 @@ async function mulaiSinkronisasi() {
     });
   }
   
-  // ==========================================
-// KODE UPLOAD & DOWNLOAD PRODUK CLOUD
-// ==========================================
-
 async function uploadProdukKeCloud() {
     if (!navigator.onLine) return showNotif("Anda offline. Butuh internet!", "error");
     if (!confirm("Upload semua produk ke Cloud? Ini akan menimpa data produk di Google Sheets.")) return;
@@ -1300,7 +1239,7 @@ async function uploadProdukKeCloud() {
             method: 'POST',
             redirect: 'follow',
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: 'push_produk', data: semuaProduk })
+            body: JSON.stringify({ action: 'push_produk', data: produkDB })
         });
 
         const result = await response.json();
