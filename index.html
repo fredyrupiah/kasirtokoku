@@ -3,77 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aplikasi Kasir Cloud (Firebase)</title>
-    
+    <title>Kasir Pro - Mobile PWA</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; color: #333; }
-        .nav { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
-        button { padding: 12px 16px; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 6px; font-weight: bold; font-size: 14px; }
-        button:hover { background: #0056b3; }
-        .btn-danger { background: #dc3545; }
-        .btn-success { background: #28a745; width: 100%; }
-        .btn-warning { background: #ffc107; color: #212529; }
-        .section { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f8f9fa; }
+        .section { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .active { display: block; }
-        input { padding: 12px; margin: 8px 0; width: 100%; box-sizing: border-box; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
-        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
-        @media(min-width: 768px) { .grid { grid-template-columns: 1fr 1fr; } }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
-        th { background-color: #f1f3f5; }
-        .product-badge { display: inline-block; padding: 12px; background: #e9ecef; margin: 5px; border-radius: 6px; cursor: pointer; font-weight: bold; border: 1px solid #ced4da; text-align: center; }
-        .history-card { border: 1px solid #dee2e6; padding: 15px; margin-top: 12px; border-radius: 6px; background: #fff; }
+        input, select { padding: 12px; width: 100%; margin: 8px 0; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     </style>
 </head>
 <body>
 
-    <div class="nav">
-        <button onclick="showSection('kasir')">ðŸ›’ Kasir</button>
-        <button onclick="showSection('produk')">ðŸ“¦ Kelola Produk</button>
-        <button onclick="showSection('riwayat')">ðŸ“œ Riwayat Online</button>
+    <div id="login-screen" style="max-width: 300px; margin: 50px auto;">
+        <h3>Login Kasir</h3>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Masuk</button>
     </div>
 
-    <div id="kasir" class="section active">
-        <h2>Menu Kasir</h2>
-        <div class="grid">
-            <div>
-                <h3>Pilih Produk</h3>
-                <div id="product-list-kasir">Memuat produk dari cloud...</div>
-            </div>
-            <div>
-                <h3>Keranjang Belanja</h3>
-                <table id="cart-table">
-                    <tr><th>Nama</th><th>Harga</th><th>Aksi</th></tr>
-                </table>
-                <h3 id="total-price">Total: Rp 0</h3>
-                <button class="btn-success" onclick="checkout()">Bayar & Cetak Nota</button>
-            </div>
+    <div id="app" style="display: none;">
+        <div style="display: flex; gap: 5px; margin-bottom: 20px;">
+            <button onclick="showSection('kasir')">🛒 Kasir</button>
+            <button onclick="showSection('produk')">📦 Produk</button>
+        </div>
+
+        <div id="kasir" class="section active">
+            <h2>Kasir</h2>
+            <input type="text" id="barcode-input" placeholder="Scan Barcode & Tekan Enter..." onkeypress="checkBarcode(event)">
+            <table id="cart-table"><tr><th>Nama</th><th>Harga</th></tr></table>
+            <h3 id="total-price">Total: Rp 0</h3>
+            <button class="btn-success" onclick="alert('Cetak Nota...')">Bayar</button>
+        </div>
+
+        <div id="produk" class="section">
+            <h2>Manajemen Produk</h2>
+            <input type="text" id="main-prod-name" placeholder="Nama Produk (ex: Sabun Mandi)">
+            <button onclick="addMainProduct()">Simpan Produk Utama</button>
+            <hr>
+            <select id="select-main-prod"></select>
+            <input type="text" id="var-name" placeholder="Nama Varian (ex: Putih)">
+            <input type="text" id="var-barcode" placeholder="Barcode">
+            <input type="number" id="var-price" placeholder="Harga">
+            <button onclick="addVariant()">Tambah Varian</button>
+            <table id="product-table"><tr><th>Produk</th><th>Varian</th><th>Harga</th></tr></table>
         </div>
     </div>
 
-    <div id="produk" class="section">
-        <h2>Kelola Daftar Produk</h2>
-        <input type="text" id="prod-name" placeholder="Nama Produk Baru">
-        <input type="number" id="prod-price" placeholder="Harga Produk (Angka saja)">
-        <button onclick="addProduct()">Simpan ke Cloud</button>
-        
-        <table id="product-table">
-            <tr><th>Nama</th><th>Harga</th><th>Aksi</th></tr>
-        </table>
-    </div>
-
-    <div id="riwayat" class="section">
-        <h2>Riwayat Transaksi Terkini (Real-time)</h2>
-        <div id="history-list">Memuat riwayat transaksi...</div>
-    </div>
-
     <script>
-        // =================================================================
-        // GANTI DENGAN KODE CONFIG YANG ANDA DAPATKAN DARI FIREBASE CONSOLE
-        // =================================================================
         const firebaseConfig = {
   apiKey: "AIzaSyCJ1ASdvIHRTTS3ffBxdoqC-81Et-WYtI4",
   authDomain: "kasir-toko-saya.firebaseapp.com",
@@ -82,154 +63,57 @@
   messagingSenderId: "999522535124",
   appId: "1:999522535124:web:76e8d7d13fc8fc0dcadd41"
 };
-        // =================================================================
-
-        // Inisialisasi Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
-        // AKTIFKAN FITUR ANTI LEMOT (Offline Persistence)
-        // Data akan disimpan di memori lokal secara otomatis dan disinkronkan saat online
-        db.enablePersistence().catch((err) => {
-            console.warn("Offline persistence gagal diaktifkan: ", err.code);
-        });
-
-        let cart = [];
-        let localProducts = {}; // Untuk menyimpan data produk sementara di RAM
-
-        // Format Angka ke Rupiah
-        function formatRupiah(angka) {
-            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+        function login() {
+            auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value)
+                .then(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('app').style.display = 'block';
+                }).catch(e => alert(e.message));
         }
 
-        // Navigasi Halaman
         function showSection(id) {
-            document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.getElementById(id).classList.add('active');
         }
 
-        // --- MENDENGARKAN DATA PRODUK (REAL-TIME LISTENER) ---
-        db.collection('products').onSnapshot((snapshot) => {
-            let prodTable = `<tr><th>Nama</th><th>Harga</th><th>Aksi</th></tr>`;
-            let prodListKasir = ``;
-            localProducts = {}; 
+        async function addMainProduct() {
+            let name = document.getElementById('main-prod-name').value;
+            await db.collection('main_products').add({ name });
+            alert("Berhasil!");
+        }
 
-            snapshot.forEach((doc) => {
-                let id = doc.id;
-                let p = doc.data();
-                localProducts[id] = p;
+        async function addVariant() {
+            let mainProdId = document.getElementById('select-main-prod').value;
+            let variantName = document.getElementById('var-name').value;
+            let barcode = document.getElementById('var-barcode').value;
+            let price = parseInt(document.getElementById('var-price').value);
+            await db.collection('variants').add({ mainProdId, variantName, barcode, price });
+            alert("Varian ditambah!");
+        }
 
-                prodTable += `<tr><td>${p.name}</td><td>${formatRupiah(p.price)}</td><td><button class="btn-danger" onclick="deleteProduct('${id}')">Hapus</button></td></tr>`;
-                prodListKasir += `<div class="product-badge" onclick="addToCart('${id}')">${p.name}<br><small>${formatRupiah(p.price)}</small></div>`;
-            });
-
-            document.getElementById('product-table').innerHTML = prodTable;
-            document.getElementById('product-list-kasir').innerHTML = snapshot.empty ? "Belum ada produk." : prodListKasir;
+        // Listener untuk dropdown produk utama
+        db.collection('main_products').onSnapshot(snap => {
+            let select = document.getElementById('select-main-prod');
+            select.innerHTML = '<option value="">Pilih Produk...</option>';
+            snap.forEach(doc => select.innerHTML += `<option value="${doc.id}">${doc.data().name}</option>`);
         });
 
-        // --- MENDENGARKAN DATA RIWAYAT (REAL-TIME LISTENER) ---
-        db.collection('history').orderBy('timestamp', 'desc').limit(50).onSnapshot((snapshot) => {
-            let histList = ``;
-            snapshot.forEach((doc) => {
-                let h = doc.data();
-                histList += `<div class="history-card">
-                    <strong>${h.dateText}</strong><br>
-                    Total Belanja: <span style="color: #28a745; font-weight: bold;">${formatRupiah(h.total)}</span><br>
-                    <small style="color: #666;">Item: ${h.items.map(i => i.name).join(', ')}</small>
-                </div>`;
-            });
-            document.getElementById('history-list').innerHTML = snapshot.empty ? "Belum ada riwayat transaksi." : histList;
-        });
-
-        // --- OPERASI PRODUK ---
-        async function addProduct() {
-            let name = document.getElementById('prod-name').value;
-            let price = document.getElementById('prod-price').value;
-            if (!name || !price) return alert('Lengkapi nama dan harga!');
-            
-            await db.collection('products').add({ name, price: parseInt(price) });
-            document.getElementById('prod-name').value = '';
-            document.getElementById('prod-price').value = '';
-        }
-
-        async function deleteProduct(id) {
-            if(confirm("Hapus produk ini dari cloud?")) {
-                await db.collection('products').doc(id).delete();
-            }
-        }
-
-        // --- OPERASI KASIR ---
-        function addToCart(id) {
-            let prod = localProducts[id];
-            cart.push({ id, name: prod.name, price: prod.price });
-            renderCart();
-        }
-
-        function removeFromCart(index) {
-            cart.splice(index, 1);
-            renderCart();
-        }
-
-        function renderCart() {
-            let cartTable = `<tr><th>Nama</th><th>Harga</th><th>Aksi</th></tr>`;
-            let total = 0;
-            cart.forEach((c, index) => {
-                cartTable += `<tr><td>${c.name}</td><td>${formatRupiah(c.price)}</td><td><button class="btn-warning" onclick="removeFromCart(${index})">Batal</button></td></tr>`;
-                total += c.price;
-            });
-            document.getElementById('cart-table').innerHTML = cartTable;
-            document.getElementById('total-price').innerText = `Total: ${formatRupiah(total)}`;
-        }
-
-        async function checkout() {
-            if (cart.length === 0) return alert('Keranjang masih kosong!');
-            
-            let total = cart.reduce((sum, item) => sum + item.price, 0);
-            let now = new Date();
-            let transaction = {
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                dateText: now.toLocaleString('id-ID'),
-                items: [...cart],
-                total
-            };
-            
-            // Simpan ke Firebase (Otomatis masuk local storage dulu jika offline, tanpa bikin lemot)
-            await db.collection('history').add(transaction);
-
-            // Jalankan fungsi cetak ke printer Bluetooth
-            await printReceipt(transaction);
-
-            cart = [];
-            renderCart();
-        }
-
-        // --- FITUR BLUETOOTH PRINTING ---
-        async function printReceipt(transaction) {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-                const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-
-                let text = "=== NOTA KASIR ONLINE ===\n";
-                text += `${transaction.dateText}\n`;
-                text += "-------------------------\n";
-                transaction.items.forEach(item => {
-                    text += `${item.name}\n${formatRupiah(item.price)}\n`;
-                });
-                text += "-------------------------\n";
-                text += `TOTAL: ${formatRupiah(transaction.total)}\n`;
-                text += "=========================\n\n\n";
-
-                let encoder = new TextEncoder();
-                await characteristic.writeValue(encoder.encode(text));
-                alert('Transaksi Sukses & Nota Dicetak!');
-            } catch (error) {
-                console.warn(error);
-                alert('Transaksi berhasil disimpan ke Cloud! (Printer tidak terhubung: ' + error.message + ')');
+        // Pencarian Barcode Kasir
+        async function checkBarcode(e) {
+            if (e.key === 'Enter') {
+                let barcode = document.getElementById('barcode-input').value;
+                let snap = await db.collection('variants').where("barcode", "==", barcode).get();
+                if (!snap.empty) {
+                    let v = snap.docs[0].data();
+                    alert("Ditemukan: " + v.variantName + " - Rp " + v.price);
+                    document.getElementById('barcode-input').value = '';
+                } else {
+                    alert("Barcode tidak ditemukan!");
+                }
             }
         }
     </script>
