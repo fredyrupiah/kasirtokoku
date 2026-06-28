@@ -185,6 +185,15 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
 </head>
 <body>
 
+<div id="layarLogin" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #4caf50; z-index: 100000; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+  <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 85%; max-width: 320px; text-align: center;">
+    <h2 style="margin-top: 0; color: #333;">Login Kasir</h2>
+    <input type="email" id="inputEmail" placeholder="Email" style="width: 100%; padding: 12px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+    <input type="password" id="inputSandi" placeholder="Kata Sandi" style="width: 100%; padding: 12px; margin-bottom: 15px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+    <button id="btnLoginAction" style="width: 100%; padding: 12px; font-size: 16px; margin: 0;">MASUK</button>
+  </div>
+</div>
+
 <div id="popupCari" class="popup-overlay">
   <div class="popup-content">
       <span class="modal-close" onclick="tutupPopupCari()">&times;</span>
@@ -243,6 +252,7 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
     <button id="btnBackupRestore" class="button-sekunder" onclick="openModalBackup()">Backup/Restore</button>
     <button id="btnUploadProduk" onclick="uploadProdukKeCloud()" style="background: #9c27b0;">↑ Upload Produk</button>
     <button id="btnDownloadProduk" onclick="downloadProdukDariCloud()" style="background: #2196f3;">↓ Download Produk</button>
+    <button id="btnLogout" onclick="keluarAplikasi()" style="background: #f44336; float: right;">Logout</button>
 </div>
 
 <div class="riwayat">
@@ -316,6 +326,7 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
   import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js"; 
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-analytics.js";
 
   const firebaseConfig = {
@@ -330,7 +341,10 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
   const app = initializeApp(firebaseConfig);
   
   window.firestoreDB = getFirestore(app); 
-  
+  window.auth = getAuth(app);
+  window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+  window.onAuthStateChanged = onAuthStateChanged;
+  window.signOut = signOut;
   window.collection = collection;
   window.getDocs = getDocs;
   window.addDoc = addDoc;
@@ -369,9 +383,54 @@ async function muatDataAwal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    muatDataAwal();
     document.addEventListener('keydown', handleGlobalScan);
+
+    // Pantau apakah user sudah login atau belum
+    window.onAuthStateChanged(window.auth, (user) => {
+        const layarLogin = document.getElementById('layarLogin');
+        if (user) {
+            // Jika sudah login: sembunyikan layar login dan muat data dari database
+            layarLogin.style.display = 'none';
+            muatDataAwal(); 
+        } else {
+            // Jika belum login (atau setelah logout): tampilkan layar login
+            layarLogin.style.display = 'flex';
+        }
+    });
+
+    // Aksi saat tombol login ditekan
+    document.getElementById('btnLoginAction').addEventListener('click', async () => {
+        const email = document.getElementById('inputEmail').value;
+        const sandi = document.getElementById('inputSandi').value;
+        const btn = document.getElementById('btnLoginAction');
+        
+        if (!email || !sandi) return alert("Email dan sandi harus diisi!");
+        
+        try {
+            btn.textContent = "Memeriksa...";
+            // Fungsi login bawaan Firebase
+            await window.signInWithEmailAndPassword(window.auth, email, sandi);
+            btn.textContent = "MASUK";
+            // Jika sukses, onAuthStateChanged di atas akan otomatis menyembunyikan layar
+        } catch (error) {
+            alert("Login gagal! Pastikan email dan sandi benar.");
+            btn.textContent = "MASUK";
+        }
+    });
 });
+
+// Fungsi untuk tombol logout
+function keluarAplikasi() {
+    if(confirm("Yakin ingin keluar?")) {
+        window.signOut(window.auth).then(() => {
+            // Bersihkan data lokal saat keluar
+            produkDB = [];
+            riwayat = [];
+            renderTabelManajemen();
+            renderRiwayat();
+        });
+    }
+}
 
 // === POPUP PENCARIAN ===
 const popupCari = document.getElementById('popupCari');
