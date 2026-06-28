@@ -318,34 +318,32 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
   import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-analytics.js";
+
   const firebaseConfig = {
-   apiKey: "AIzaSyCJ1ASdvIHRTTS3ffBxdoqC-81Et-WYtI4",
-   authDomain: "kasir-toko-saya.firebaseapp.com",
-   projectId: "kasir-toko-saya",
-   storageBucket: "kasir-toko-saya.firebasestorage.app",
-   messagingSenderId: "999522535124",
-   appId: "1:999522535124:web:76e8d7d13fc8fc0dcadd41"
+    apiKey: "AIzaSyCJ1ASdvIHRTTS3ffBxdoqC-81Et-WYtI4",
+    authDomain: "kasir-toko-saya.firebaseapp.com",
+    projectId: "kasir-toko-saya",
+    storageBucket: "kasir-toko-saya.firebasestorage.app",
+    messagingSenderId: "999522535124",
+    appId: "1:999522535124:web:76e8d7d13fc8fc0dcadd41"
   };
 
   const app = initializeApp(firebaseConfig);
-  window.db = getFirestore(app);
+  
+  window.firestoreDB = getFirestore(app); 
+  
+  window.collection = collection;
+  window.getDocs = getDocs;
+  window.addDoc = addDoc;
+  window.updateDoc = updateDoc;
+  window.deleteDoc = deleteDoc;
+  window.doc = doc;
+  window.query = query;
+  window.orderBy = orderBy;
+  
   const analytics = getAnalytics(app);
 </script>
-<script src="https://unpkg.com/dexie/dist/dexie.js"></script>
 <script>
-	const produkDB_default = [
-    { "nama": "KIRIM", "barcode": "0101010101", "hargaBeli": 0, "variasi": [{ "nama": "pcs", "barcode": "0202020202", "harga": 2000 }] }
-];
-// === INISIALISASI DEXIE DB ===
-const db = new Dexie("KasirWpaDB");
-
-// Naikkan versi ke 2, tambahkan is_synced di riwayat
-db.version(2).stores({
-    produk: '++id, nama, barcode, *variasi.barcode',
-    riwayat: '++id, tanggal, namaPembeli, total, is_synced'
-});
-
-let produkDB = [];
 let keranjang = [];
 let riwayat = [];
 let idRiwayatEdit = null;
@@ -354,16 +352,18 @@ let globalScanTimer = null;
 
 async function muatDataAwal() {
     try {
-        const qProduk = query(collection(window.db, "produk"));
+        // Gunakan firestoreDB
+        const qProduk = query(collection(window.firestoreDB, "produk"));
         const snapshotProduk = await getDocs(qProduk);
         produkDB = snapshotProduk.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        const qRiwayat = query(collection(window.db, "riwayat"));
+        const qRiwayat = query(collection(window.firestoreDB, "riwayat"));
         const snapshotRiwayat = await getDocs(qRiwayat);
         riwayat = snapshotRiwayat.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
         renderRiwayat();
     } catch (error) {
+        console.error(error);
         showNotif("Gagal ambil data cloud", "error");
     }
 }
@@ -587,16 +587,19 @@ async function simpanProduk() {
             });
         }
     });
+    
     try {
         if (id === "-1") {
-            await addDoc(collection(window.db, "produk"), produkBaru);
+            // Gunakan firestoreDB
+            await addDoc(collection(window.firestoreDB, "produk"), produkBaru);
             showNotif("Produk ditambah!", "success");
         } else {
-            const docRef = doc(window.db, "produk", id);
+            // Gunakan firestoreDB
+            const docRef = doc(window.firestoreDB, "produk", id);
             await updateDoc(docRef, produkBaru);
             showNotif("Produk diupdate!", "success");
         }
-        await muatDataAwal(); // Refresh list
+        await muatDataAwal(); 
         showListProduk();
     } catch (e) {
         showNotif("Gagal simpan: " + e.message, "error");
@@ -651,13 +654,6 @@ async function restoreProduk() {
         if (!Array.isArray(data) || (data.length > 0 && typeof data[0].nama === 'undefined')) {
           throw new Error("Format file tidak valid atau bukan data produk.");
         }
-        
-        // Hapus data lama di Dexie, lalu masukkan data dari backup
-        await db.produk.clear(); 
-        await db.produk.bulkAdd(data);
-        
-        // Muat ulang data ke variabel lokal
-        produkDB = await db.produk.toArray(); 
         
         renderTabelManajemen(); 
         showNotif("Data produk berhasil di-restore!", "success");
@@ -1299,8 +1295,6 @@ async function uploadProdukKeCloud() {
         const btn = document.getElementById("btnUploadProduk");
         btn.textContent = "Mengupload...";
         
-        // Ambil semua produk dari lokal
-        const semuaProduk = await db.produk.toArray();
         
         const response = await fetch(URL_GAS, {
             method: 'POST',
@@ -1340,12 +1334,7 @@ async function downloadProdukDariCloud() {
         const result = await response.json();
         
         if (result.status === 'success' && result.data.length > 0) {
-            // Hapus data lama di HP, lalu masukkan data dari Sheets
-            await db.produk.clear();
-            await db.produk.bulkAdd(result.data);
             
-            // Segarkan variabel dan tampilan layar
-            produkDB = await db.produk.toArray();
             renderTabelManajemen();
             
             showNotif(`Sukses mendownload ${result.data.length} produk!`, "success", 3500);
