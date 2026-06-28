@@ -250,8 +250,6 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
     <button id="btnManajemen" onclick="openManajemenProduk()">PRODUK</button>
     <button id="btnRiwayat" onclick="toggleRiwayat()">RIWAYAT</button> 
     <button id="btnBackupRestore" class="button-sekunder" onclick="openModalBackup()">Backup/Restore</button>
-    <button id="btnUploadProduk" onclick="uploadProdukKeCloud()" style="background: #9c27b0;">↑ Upload Produk</button>
-    <button id="btnDownloadProduk" onclick="downloadProdukDariCloud()" style="background: #2196f3;">↓ Download Produk</button>
     <button id="btnLogout" onclick="keluarAplikasi()" style="background: #f44336; float: right;">Logout</button>
 </div>
 
@@ -1267,9 +1265,6 @@ function buatDataESCPOS(transaksi) {
     return new Uint8Array(commands);
 }
 
-// === SISTEM SINKRONISASI CLOUD ===
-const URL_GAS = "https://script.google.com/macros/s/AKfycbxW0WYiZAytb_iZzuGONoTRRecRMKYdc_VBrf-2n3axH6pyA7ef6Y7Lk2aQJr1VcKVTAQ/exec";
-
 </script>
 <script>
 
@@ -1284,69 +1279,6 @@ const URL_GAS = "https://script.google.com/macros/s/AKfycbxW0WYiZAytb_iZzuGONoTR
         });
     });
   }
-  
-async function uploadProdukKeCloud() {
-    if (!navigator.onLine) return showNotif("Anda offline. Butuh internet!", "error");
-    if (!confirm("Upload semua produk ke Cloud? Ini akan menimpa data produk di Google Sheets.")) return;
-
-    try {
-        const btn = document.getElementById("btnUploadProduk");
-        btn.textContent = "Mengupload...";
-        
-        
-        const response = await fetch(URL_GAS, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: 'push_produk', data: produkDB })
-        });
-
-        const result = await response.json();
-        if (result.status === 'success') {
-            showNotif("Produk berhasil di-upload ke Cloud!", "success", 3000);
-        } else {
-            showNotif("Gagal upload: " + result.message, "error", 4000);
-        }
-    } catch (e) {
-        showNotif("Error: Gagal menghubungi server.", "error");
-    } finally {
-        document.getElementById("btnUploadProduk").textContent = "↑ Upload Produk ke Cloud";
-    }
-}
-
-async function downloadProdukDariCloud() {
-    if (!navigator.onLine) return showNotif("Anda offline. Butuh internet!", "error");
-    if (!confirm("Tarik produk dari Cloud? PERINGATAN: Semua data produk di HP ini akan diganti dengan data dari internet!")) return;
-
-    try {
-        const btn = document.getElementById("btnDownloadProduk");
-        btn.textContent = "Mendownload...";
-        
-        const response = await fetch(URL_GAS, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: 'pull_produk' })
-        });
-
-        const result = await response.json();
-        
-        if (result.status === 'success' && result.data.length > 0) {
-            
-            renderTabelManajemen();
-            
-            showNotif(`Sukses mendownload ${result.data.length} produk!`, "success", 3500);
-        } else if (result.status === 'success' && result.data.length === 0) {
-            showNotif("Data produk di Cloud kosong.", "error");
-        } else {
-            showNotif("Gagal download: " + result.message, "error", 4000);
-        }
-    } catch (e) {
-        showNotif("Error: Gagal menghubungi server.", "error");
-    } finally {
-        document.getElementById("btnDownloadProduk").textContent = "↓ Download Produk dari Cloud";
-    }
-}
   
 </script>
 </body>
