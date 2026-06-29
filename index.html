@@ -702,24 +702,36 @@ async function restoreProduk() {
     return;
   }
 
-  if (confirm("Anda yakin ingin me-restore data dari file ini? SEMUA data produk saat ini akan diganti.")) {
+  if (confirm("Anda yakin ingin me-restore data dari file ini? SEMUA data produk saat ini akan diganti (Dihapus & Diganti Baru).")) {
     const reader = new FileReader();
-    reader.onload = async function(e) { // Tambahkan async di sini
+    reader.onload = async function(e) {
       try {
         const data = JSON.parse(e.target.result);
-        if (!Array.isArray(data) || (data.length > 0 && typeof data[0].nama === 'undefined')) {
-          throw new Error("Format file tidak valid atau bukan data produk.");
+        if (!Array.isArray(data)) throw new Error("Format file tidak valid.");
+
+        // 1. Hapus semua data produk lama di Firebase terlebih dahulu
+        showNotif("Menghapus data lama...", "info");
+        for (let p of produkDB) {
+          await window.deleteDoc(window.doc(window.firestoreDB, "produk", p.id));
         }
-        
-        renderTabelManajemen(); 
-        showNotif("Data produk berhasil di-restore!", "success");
+
+        // 2. Upload data baru dari file JSON ke Firebase
+        showNotif("Mengupload data baru...", "info");
+        for (let item of data) {
+          // Hapus properti 'id' agar Firebase membuat ID baru
+          delete item.id; 
+          await window.addDoc(window.collection(window.firestoreDB, "produk"), item);
+        }
+
+        // 3. Refresh data
+        await muatDataAwal();
+        showNotif("Restore sukses!", "success");
         closeModalBackup();
-        fileInput.value = ''; 
+        fileInput.value = '';
       } catch (err) {
-        showNotif("Gagal me-restore data: " + err.message, "error", 3500);
+        showNotif("Gagal restore: " + err.message, "error", 3500);
       }
     };
-    reader.onerror = () => showNotif("Gagal membaca file.", "error");
     reader.readAsText(file);
   }
 }
