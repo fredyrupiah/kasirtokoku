@@ -257,6 +257,10 @@ input[type="number"].qty-input::-webkit-inner-spin-button {
   <div id="riwayatBox" style="display:none; margin-top:10px;">
 
 <h2>Riwayat Transaksi</h2>
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <button id="btnHariIni" style="flex:1;" onclick="setFilterWaktu('hari_ini')">Hari Ini</button>
+        <button id="btnSemua" style="flex:1;" class="button-sekunder" onclick="setFilterWaktu('semua')">Semua Waktu</button>
+    </div>
     <input type="text" id="cariRiwayat" placeholder="Cari riwayat (nama, tanggal, total)...">
     <table id="tabelRiwayat">
       <thead> <tr> <th>Tanggal</th> <th>Pembeli</th> <th>Total</th> <th>Uang</th> <th>Kembali/Hutang</th> <th>Aksi</th> </tr> </thead>
@@ -876,18 +880,75 @@ function hitungKembalian() {
 }
 
 
+// === FILTER WAKTU RIWAYAT ===
+let modeFilterWaktu = 'hari_ini'; // Default tampilkan hari ini saja saat dibuka
+
+function setFilterWaktu(mode) {
+    modeFilterWaktu = mode;
+    const btnHariIni = document.getElementById('btnHariIni');
+    const btnSemua = document.getElementById('btnSemua');
+
+    // Ubah warna tombol untuk menandakan mana yang sedang aktif
+    if (mode === 'hari_ini') {
+        btnHariIni.className = ''; 
+        btnSemua.className = 'button-sekunder';
+    } else {
+        btnHariIni.className = 'button-sekunder';
+        btnSemua.className = '';
+    }
+    renderRiwayat(); // Render ulang tabel setelah tombol ditekan
+}
+
 function renderRiwayat() {
     const filter = document.getElementById('cariRiwayat').value.toLowerCase();
     const tbody = document.querySelector("#tabelRiwayat tbody");
     tbody.innerHTML = "";
     
+    // Ambil tanggal hari ini saja dalam format lokal (misal: "17/8/2026")
+    const tglHariIni = new Date().toLocaleDateString('id-ID');
+
     const riwayatTampil = riwayat.filter(r => {
         const nama = (r.namaPembeli || '').toLowerCase();
         const tanggal = r.tanggal.toLowerCase();
         const total = r.total.toLowerCase();
         const status = r.statusHutang ? 'hutang' : ''; // Bisa cari "hutang"
-        return nama.includes(filter) || tanggal.includes(filter) || total.includes(filter) || status.includes(filter);
+        
+        // 1. Cek apakah cocok dengan teks pencarian
+        const cocokPencarian = nama.includes(filter) || tanggal.includes(filter) || total.includes(filter) || status.includes(filter);
+        
+        // 2. Cek apakah cocok dengan filter tombol (Hari Ini vs Semua)
+        let cocokWaktu = true;
+        if (modeFilterWaktu === 'hari_ini') {
+            // Hanya tampilkan jika string tanggal mengandung tanggal hari ini
+            cocokWaktu = r.tanggal.includes(tglHariIni);
+        }
+
+        return cocokPencarian && cocokWaktu;
     });
+
+    riwayatTampil.forEach(r => {
+        const originalIndex = riwayat.findIndex(item => item === r);
+        const tr = document.createElement("tr");
+
+        // --- Tambahan Logika untuk Badge ---
+        const badgeHutang = r.statusHutang ? '<span class="badge badge-hutang">Hutang</span>' : '';
+        const labelKolomTerakhir = r.statusHutang ? 'Hutang' : 'Kembali';
+        // --- Akhir Tambahan ---
+        
+        tr.innerHTML = `
+            <td>${r.tanggal}</td>
+            <td>${r.namaPembeli || '-'} ${badgeHutang}</td>
+            <td>Rp ${r.total}</td>
+            <td>Rp ${r.uang}</td>
+            <td>Rp ${r.kembali} <small>(${labelKolomTerakhir})</small></td>
+            <td>
+                <button onclick="lihatDetail(${originalIndex})">Lihat</button>
+                <button onclick="editTransaksi(${originalIndex})">Edit</button>
+                <button class="button-hapus" onclick="hapusRiwayat('${r.id}')">Hapus</button>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
 
     riwayatTampil.forEach(r => {
         const originalIndex = riwayat.findIndex(item => item === r);
